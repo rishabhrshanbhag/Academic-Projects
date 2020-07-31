@@ -1,0 +1,2 @@
+https://cran.r-project.org/web/packages/olsrr/vignettes/variable_selection.html
+http://r-statistics.co/Linear-Regression.html

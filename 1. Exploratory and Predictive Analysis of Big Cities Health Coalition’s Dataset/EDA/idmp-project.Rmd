@@ -1,0 +1,270 @@
+---
+title: "IDMP PROJECT"
+date: "4/4/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Libraries, warning=FALSE}
+library(tidyr)
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(stringr)
+library(tidyverse)
+library(tidytext)
+library(usmap)
+library(lubridate)
+library(plot3D)
+#library(ggmap)
+#register_google(key ="AIzaSyDjwIBW34N7aCl1PwjKEP4yR208ZP1MUWo", write =TRUE)
+```
+
+
+```{r Preprocessing, warning=FALSE}
+
+data<- read_csv('C:/Users/Anonymous/Google Drive/DS/IDMP DS 5110/Project/BCHI-dataset_2019-03-04.csv')
+
+df <- data.frame(data, check.names=FALSE,stringsAsFactors=FALSE)
+
+df <- df %>%
+  filter(!Year == 2017 & !Year == 2018) %>%
+  filter(!`Indicator Category` == "Demographics" & !`Indicator Category` =="Social and Economic Factors") %>%
+  filter(!Place == "U.S. Total, U.S. Total") %>%
+  separate(Place,c("City_county","State"),sep = ",") %>%
+  separate(City_county,c("City","County"),sep=" [(]") %>%
+  mutate(County = sapply(strsplit(County, split=')', fixed=TRUE), function(x) (x[1]))) %>%
+  mutate(State = sapply(strsplit(State, split=' ', fixed=TRUE), function(x) (x[2])))
+
+heart <- read_csv('C:/Users/Anonymous/Google Drive/DS/IDMP DS 5110/Project/heart.csv')
+
+heart <- heart %>%
+  mutate(Year= sample(2010:2016, size=nrow(heart),replace = TRUE)) %>%
+  mutate( State = "OH", City = "Cleveland")
+
+df<- bind_rows(df,heart)
+
+states_df <- df %>%
+  group_by(State) %>%
+  count() %>%
+  rename(state = State, Count = n)
+
+#city_df <- distinct(df["City"])
+#city_coord <- mutate_geocode(city_df, City)
+#write.csv(city_coord, "City_geocodes.csv", row.names = FALSE)
+
+city_coord <- data.frame(read_csv('C:/Users/Anonymous/Google Drive/DS/IDMP DS 5110/Project/City_geocodes.csv'))
+
+df<- df %>%
+  left_join(city_coord,by=c("City","City"))
+
+city_coord <- df %>%
+  group_by(City,lat,lon) %>%
+  count() 
+
+#write.csv(df,"Preprocessed_data.csv",row.names =FALSE)
+
+```
+
+# Visualizations:
+
+
+```{r 1, warning=FALSE}
+df %>%
+  group_by(`Indicator Category`, Year) %>%
+  count() %>%
+  ggplot(aes(x = `Indicator Category`, y = n, fill = Year)) + 
+	geom_col(show.legend = FALSE) + 
+  facet_wrap(~ Year) + coord_flip()
+
+```
+
+
+
+```{r 2, warning=FALSE}
+
+df %>%
+  group_by(`Indicator Category`) %>%
+  summarize(sum=sum(Year)) %>%
+  ggplot(aes(`Indicator Category`,sum/10000)) +
+  geom_col(aes(fill= `Indicator Category`), show.legend = FALSE) +
+  labs(y="Count (per 10,000 data points)") +
+  coord_flip()
+
+```
+
+
+```{r 3, warning=FALSE}
+df %>%
+  group_by(`Indicator Category`, Indicator ) %>%
+  count() %>%
+  filter(`Indicator Category` == "Chronic Disease") %>%
+  ggplot(aes(Indicator,n)) + 
+  geom_col(aes(fill=Indicator),show.legend = FALSE) + 
+  coord_flip() +
+  labs(title = "Chronic Disease data distribution ", y= "(per 100,000 people)")
+
+    
+```
+
+```{r 4, warning=FALSE}
+
+city_transformed <- usmap_transform(city_coord[,c("lon","lat","n")])  
+
+plot_usmap(fill="light yellow", color="orange", labels = TRUE) +
+  geom_point(data=city_transformed, aes(x=lon.1,y=lat.1,size=n),color="magenta",alpha=0.5) +
+  labs(title = "Distribution of data by US Cities",size="Counts (per 10,000 data points)") +
+  theme(legend.position = "right")
+
+```
+
+```{r 5, warning=FALSE}
+
+
+
+plot_usmap(data = states_df, values = "Count", color="orange",labels =TRUE) +
+  scale_fill_continuous(low="white",high="dark blue",name = "Count per state ", label = scales::comma) +
+  theme(legend.position = "right")
+
+```
+
+```{r 6, warning=FALSE}
+
+df %>%
+  group_by(`Indicator Category`,Year) %>%
+  summarize(Count=n()) %>%
+  ggplot(aes(x=Year)) +
+  geom_area(aes(y=Count,fill=`Indicator Category`),size = 1,show.legend = FALSE,alpha =0.5)+
+  facet_wrap(~`Indicator Category`)+
+  scale_fill_manual(values = c("Red","yellow","light green","blue","green","brown","orange","magenta","cyan","purple","light blue"))+
+  theme(panel.grid.minor = element_blank()) 
+  
+```
+
+```{r 7, warning=FALSE}
+
+df %>%
+  group_by(`Indicator Category`,Year) %>%
+  summarize(Count=n()) %>%
+  ggplot(aes(x=Year)) +
+  geom_line(aes(y=Count,col=`Indicator Category`),size = 1)+
+  #facet_wrap(~`Indicator Category`)+
+  theme(panel.grid.minor = element_blank()) 
+  
+```
+                        
+```{r 8, warning=FALSE}
+df%>%
+  group_by(`Indicator Category`,Indicator,Year) %>%
+  count() %>%
+  ggplot() +
+  geom_col(aes(x=`Indicator Category`,y=n,fill = `Indicator Category`),show.legend = FALSE)+
+  facet_wrap(~Year)+
+  coord_flip()
+
+```
+
+
+```{r 9, warning = FALSE}
+
+summary(df)
+
+```
+
+
+```{r 10, warning = FALSE}
+
+df %>%
+  filter(`Indicator Category` == "Chronic Disease") %>%
+  group_by(Year) %>%
+  ggplot(aes(x=Year))+
+  geom_bar()
+
+```
+
+
+```{r 11, warning = FALSE}
+
+temp <- df %>%
+  group_by(`Indicator Category`,City)%>%
+  count()
+
+temp <- temp %>%
+  right_join(city_coord, by=c("City"="City"))
+
+
+temp_transformed <- usmap_transform(temp[,c("lon","lat")])  
+
+temp <- temp_transformed %>%
+  right_join(temp) %>%
+  group_by(`Indicator Category`)
+
+plot_usmap(fill="light yellow", color="red", labels = TRUE) +
+  geom_point(data=temp,aes(x=lon.1,y=lat.1,size=n.x,color=temp$`Indicator Category`)) +
+   labs(title = "Distribution of cases by US cities",col = "Indicator Category",size="Counts") +
+theme(legend.position = "right") +
+  theme(plot.title = element_text(size = 12, face = "bold", hjust = 0.5))
+
+
+```
+
+
+```{r 12, warning = FALSE}
+df %>%
+  group_by(Year) %>%
+  count() %>%
+  ggplot(aes(x=Year, y=n)) +
+  geom_col(aes(fill=Year),show.legend = FALSE)+
+  geom_point(col ="red",size=2)+
+  geom_line(col = "red",size=1) +
+  labs(title ="Disctribution of data points per year",y="Count (per 10,000 data points)")
+
+```
+
+
+```{r 13, warning = FALSE}
+
+df %>%
+  group_by(City,`Indicator Category`)%>%
+  count() %>%
+  ggplot(aes(x=`Indicator Category`,y=n))+
+  geom_col(aes(fill=`Indicator Category`),show.legend = FALSE)+
+  facet_wrap(~City)+
+  coord_flip()+
+  labs(y="Count (per 10,000)")
+```
+
+
+```{r 14}
+
+df %>%
+  filter(`Indicator Category` == "Chronic Disease") %>%
+  group_by(Indicator,Year) %>%
+  count() %>%
+  ggplot(aes(x=Year, y=n)) +
+  geom_point(aes(col=Indicator),size=2)+
+  geom_line(aes(col=Indicator))+
+  theme_classic()+
+  labs(y="Count (per 10,000 people)",title = "Trend for Chronic Disease Indicators")
+
+```
+
+
+```{r 15}
+df %>%
+  filter(Indicator == "Heart Disease Mortality Rate") %>%
+  group_by(Indicator,City,Year) %>%
+  count() %>%
+  ggplot(aes(x=Year, y=n)) +
+  geom_point(col="red",size=2)+
+  geom_line(col ="red")+
+  labs(y="Count (per 10,000 people)", title = "Trend of Heart Disease Mortality rate over the Years") +
+  facet_wrap(~City)
+
+
+  
+
+```
